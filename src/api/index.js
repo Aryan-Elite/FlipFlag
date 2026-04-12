@@ -4,7 +4,7 @@ import cors from 'cors';
 import { toNodeHandler } from 'better-auth/node';
 import { testConnection } from '../db/client.js';
 import { auth } from '../lib/auth.js';
-import router from './routes.js';
+import router from './routes/index.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
