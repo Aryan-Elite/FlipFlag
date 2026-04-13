@@ -1,5 +1,5 @@
 import { createAuthClient } from "better-auth/client"
 
 export const authClient = createAuthClient({
-  baseURL: typeof window !== "undefined" ? window.location.origin : "",
+  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001",
 })
