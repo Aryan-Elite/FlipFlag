@@ -1,22 +1,35 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { Flag, ArrowLeft, Plus, Trash2, X } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  getEnvironment,
+  getFlags,
+  createFlag as apiCreateFlag,
+  toggleFlag as apiToggleFlag,
+  deleteFlag as apiDeleteFlag,
+} from "@/lib/api"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type FlagItem = {
-  id: number
+  id: string
   key: string
   name: string
-  isActive: boolean
-  defaultRollout: number
-  createdAt: string
+  is_active: boolean
+  default_rollout: number
+  created_at: string
+}
+
+type EnvInfo = {
+  id: string
+  name: string
+  sdk_key: string
 }
 
 // ─── Toggle switch ────────────────────────────────────────────────────────────
@@ -42,16 +55,27 @@ function Toggle({ enabled, onToggle }: { enabled: boolean; onToggle: () => void 
 
 function CreateFlagModal({ onClose, onCreate }: {
   onClose: () => void
-  onCreate: (key: string, name: string, defaultRollout: number) => void
+  onCreate: (key: string, name: string, description: string, tags: string[]) => Promise<void>
 }) {
-  const [key,            setKey]            = useState("")
-  const [name,           setName]           = useState("")
-  const [defaultRollout, setDefaultRollout] = useState(0)
+  const [key,         setKey]         = useState("")
+  const [name,        setName]        = useState("")
+  const [description, setDescription] = useState("")
+  const [tagsInput,   setTagsInput]   = useState("")
+  const [loading,     setLoading]     = useState(false)
+  const [error,       setError]       = useState("")
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!key.trim()) return
-    onCreate(key.trim().toLowerCase().replace(/\s+/g, "-"), name.trim() || key.trim(), defaultRollout)
+    setLoading(true)
+    setError("")
+    const tags = tagsInput.split(",").map((t) => t.trim()).filter(Boolean)
+    try {
+      await onCreate(key.trim().toLowerCase().replace(/\s+/g, "-"), name.trim() || key.trim(), description.trim(), tags)
+    } catch (err: any) {
+      setError(err.message || "Failed to create flag.")
+      setLoading(false)
+    }
   }
 
   return (
@@ -100,25 +124,34 @@ function CreateFlagModal({ onClose, onCreate }: {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">
-              Default Rollout <span className="text-muted-foreground text-xs font-normal">({defaultRollout}%)</span>
-            </label>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={defaultRollout}
-              onChange={(e) => setDefaultRollout(Number(e.target.value))}
-              className="w-full"
+            <label className="text-sm font-medium">Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What does this flag control?"
+              rows={2}
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30 resize-none"
             />
-            <p className="text-[11px] text-muted-foreground">
-              % of users who see this flag when no targeting rules match
-            </p>
           </div>
 
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Tags</label>
+            <input
+              value={tagsInput}
+              onChange={(e) => setTagsInput(e.target.value)}
+              placeholder="e.g. frontend, payments, beta"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+            />
+            <p className="text-[11px] text-muted-foreground">Comma-separated list of tags</p>
+          </div>
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
+
           <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="outline" size="sm" onClick={onClose}>Cancel</Button>
-            <Button type="submit" size="sm" disabled={!key.trim()}>Create Flag</Button>
+            <Button type="button" variant="outline" size="sm" onClick={onClose} disabled={loading}>Cancel</Button>
+            <Button type="submit" size="sm" disabled={!key.trim() || loading}>
+              {loading ? "Creating..." : "Create Flag"}
+            </Button>
           </div>
         </form>
       </div>
@@ -128,39 +161,55 @@ function CreateFlagModal({ onClose, onCreate }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-const ENV_META: Record<string, { name: string; color: string }> = {
-  dev:  { name: "Development", color: "bg-blue-500"    },
-  prod: { name: "Production",  color: "bg-emerald-500" },
+const ENV_COLOR: Record<string, string> = {
+  Development: "bg-blue-500",
+  Production:  "bg-emerald-500",
 }
 
 export default function FlagsPage() {
   const params = useParams()
   const id     = String(params.id)
   const envId  = String(params.envId)
-  const env    = ENV_META[envId] ?? { name: envId, color: "bg-zinc-500" }
 
-  const [flags,      setFlags]      = useState<FlagItem[]>([])
-  const [showModal,  setShowModal]  = useState(false)
+  const [env,       setEnv]       = useState<EnvInfo | null>(null)
+  const [flags,     setFlags]     = useState<FlagItem[]>([])
+  const [loading,   setLoading]   = useState(true)
+  const [error,     setError]     = useState("")
+  const [showModal, setShowModal] = useState(false)
 
-  function handleCreate(key: string, name: string, defaultRollout: number) {
-    setFlags((prev) => [
-      ...prev,
-      { id: Date.now(), key, name, isActive: false, defaultRollout, createdAt: "Just now" },
-    ])
+  useEffect(() => {
+    Promise.all([getEnvironment(envId), getFlags(envId)])
+      .then(([envData, flagsData]) => {
+        setEnv(envData)
+        setFlags(flagsData)
+      })
+      .catch((err) => setError(err.message || "Failed to load."))
+      .finally(() => setLoading(false))
+  }, [envId])
+
+  async function handleCreate(key: string, name: string, description: string, tags: string[]) {
+    const flag = await apiCreateFlag(envId, key, name, description, tags)
+    setFlags((prev) => [flag, ...prev])
     setShowModal(false)
   }
 
-  function toggleFlag(id: number) {
+  async function handleToggle(flagId: string) {
+    const result = await apiToggleFlag(flagId, envId)
     setFlags((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, isActive: !f.isActive } : f))
+      prev.map((f) => (f.id === flagId ? { ...f, is_active: result.is_active } : f))
     )
   }
 
-  function deleteFlag(id: number) {
-    setFlags((prev) => prev.filter((f) => f.id !== id))
+  async function handleDelete(flagId: string) {
+    await apiDeleteFlag(flagId)
+    setFlags((prev) => prev.filter((f) => f.id !== flagId))
   }
 
-  const activeCount = flags.filter((f) => f.isActive).length
+  if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading...</div>
+  if (error || !env) return <div className="p-6 text-sm text-destructive">{error || "Environment not found."}</div>
+
+  const activeCount = flags.filter((f) => f.is_active).length
+  const envColor    = ENV_COLOR[env.name] ?? "bg-zinc-500"
 
   return (
     <>
@@ -175,7 +224,7 @@ export default function FlagsPage() {
           </Link>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <span className={`size-2.5 rounded-full ${env.color}`} />
+              <span className={`size-2.5 rounded-full ${envColor}`} />
               <div>
                 <h1 className="text-2xl font-semibold">{env.name} Flags</h1>
                 <p className="text-sm text-muted-foreground mt-0.5">
@@ -227,22 +276,22 @@ export default function FlagsPage() {
                           <div className="h-1.5 w-20 rounded-full bg-muted">
                             <div
                               className="h-full rounded-full bg-blue-500 transition-all"
-                              style={{ width: `${flag.defaultRollout}%` }}
+                              style={{ width: `${flag.default_rollout}%` }}
                             />
                           </div>
-                          <span className="text-xs text-muted-foreground">{flag.defaultRollout}%</span>
+                          <span className="text-xs text-muted-foreground">{flag.default_rollout}%</span>
                         </div>
                       </td>
                       <td className="px-6 py-3">
                         <Badge
                           variant="secondary"
-                          className={flag.isActive ? "bg-emerald-500/15 text-emerald-600" : ""}
+                          className={flag.is_active ? "bg-emerald-500/15 text-emerald-600" : ""}
                         >
-                          {flag.isActive ? "Enabled" : "Disabled"}
+                          {flag.is_active ? "Enabled" : "Disabled"}
                         </Badge>
                       </td>
                       <td className="px-6 py-3">
-                        <Toggle enabled={flag.isActive} onToggle={() => toggleFlag(flag.id)} />
+                        <Toggle enabled={flag.is_active} onToggle={() => handleToggle(flag.id)} />
                       </td>
                       <td className="px-6 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -253,7 +302,7 @@ export default function FlagsPage() {
                             variant="ghost"
                             size="icon"
                             className="size-7 text-muted-foreground hover:text-destructive"
-                            onClick={() => deleteFlag(flag.id)}
+                            onClick={() => handleDelete(flag.id)}
                           >
                             <Trash2 className="size-3.5" />
                           </Button>
@@ -273,6 +322,7 @@ export default function FlagsPage() {
           onClose={() => setShowModal(false)}
           onCreate={handleCreate}
         />
+
       )}
     </>
   )
