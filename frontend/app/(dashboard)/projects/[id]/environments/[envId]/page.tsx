@@ -171,11 +171,12 @@ export default function FlagsPage() {
   const id     = String(params.id)
   const envId  = String(params.envId)
 
-  const [env,       setEnv]       = useState<EnvInfo | null>(null)
-  const [flags,     setFlags]     = useState<FlagItem[]>([])
-  const [loading,   setLoading]   = useState(true)
-  const [error,     setError]     = useState("")
-  const [showModal, setShowModal] = useState(false)
+  const [env,           setEnv]           = useState<EnvInfo | null>(null)
+  const [flags,         setFlags]         = useState<FlagItem[]>([])
+  const [loading,       setLoading]       = useState(true)
+  const [error,         setError]         = useState("")
+  const [showModal,     setShowModal]     = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<FlagItem | null>(null)
 
   useEffect(() => {
     Promise.all([getEnvironment(envId), getFlags(envId)])
@@ -200,9 +201,10 @@ export default function FlagsPage() {
     )
   }
 
-  async function handleDelete(flagId: string) {
-    await apiDeleteFlag(flagId)
-    setFlags((prev) => prev.filter((f) => f.id !== flagId))
+  async function handleDelete(flag: FlagItem) {
+    await apiDeleteFlag(flag.id)
+    setFlags((prev) => prev.filter((f) => f.id !== flag.id))
+    setConfirmDelete(null)
   }
 
   if (loading) return <div className="p-6 text-sm text-muted-foreground">Loading...</div>
@@ -302,7 +304,7 @@ export default function FlagsPage() {
                             variant="ghost"
                             size="icon"
                             className="size-7 text-muted-foreground hover:text-destructive"
-                            onClick={() => handleDelete(flag.id)}
+                            onClick={() => setConfirmDelete(flag)}
                           >
                             <Trash2 className="size-3.5" />
                           </Button>
@@ -322,7 +324,23 @@ export default function FlagsPage() {
           onClose={() => setShowModal(false)}
           onCreate={handleCreate}
         />
+      )}
 
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-xl border border-border bg-background shadow-2xl p-6 space-y-4">
+            <div className="space-y-1">
+              <h2 className="font-semibold text-destructive">Delete Flag</h2>
+              <p className="text-sm text-muted-foreground">
+                This will permanently delete <span className="font-mono font-medium text-foreground">{confirmDelete.key}</span> from <span className="font-medium text-foreground">all environments</span> including Development and Production. This cannot be undone.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setConfirmDelete(null)}>Cancel</Button>
+              <Button variant="destructive" size="sm" onClick={() => handleDelete(confirmDelete)}>Delete Flag</Button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   )
