@@ -116,3 +116,11 @@ export function deleteRule(ruleId) {
 export function deleteFlag(flagId) {
   return request(`/api/flags/${flagId}`, { method: "DELETE" });
 }
+
+export function getDashboardStats() {
+  return request("/api/users/dashboard-stats");
+}
+
+export function getMe() {
+  return request("/api/users/me");
+}

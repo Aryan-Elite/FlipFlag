@@ -1,48 +1,65 @@
-import { Flag, Activity, Database, TrendingUp, Plus } from "lucide-react"
+"use client"
+
+import { useEffect, useState } from "react"
+import { Flag, Activity, Database, FolderOpen, Plus } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { getDashboardStats } from "@/lib/api"
 
-const stats = [
-  {
-    label: "Total Flags",
-    value: "0",
-    icon: Flag,
-    sub: "Across all environments",
-    iconColor: "text-violet-500",
-    iconBg: "bg-violet-500/10",
-  },
-  {
-    label: "Active Flags",
-    value: "0",
-    icon: Activity,
-    sub: "↑ 0% from last week",
-    subColor: "text-emerald-500",
-    iconColor: "text-rose-500",
-    iconBg: "bg-rose-500/10",
-  },
-  {
-    label: "Environments",
-    value: "Development, Production",
-    isText: true,
-    icon: Database,
-    iconColor: "text-blue-500",
-    iconBg: "bg-blue-500/10",
-  },
-  {
-    label: "Changes (24h)",
-    value: "0",
-    icon: TrendingUp,
-    sub: "↑ 0 more than yesterday",
-    subColor: "text-emerald-500",
-    iconColor: "text-amber-500",
-    iconBg: "bg-amber-500/10",
-  },
-]
-
-const recentFlags: { name: string; project: string; environment: string; enabled: boolean }[] = []
+type Counts = { total_flags: string; active_flags: string; total_projects: string }
+type RecentFlag = { key: string; name: string; project_name: string; created_at: string; is_active: boolean }
 
 export default function DashboardPage() {
+  const [counts,  setCounts]  = useState<Counts | null>(null)
+  const [recent,  setRecent]  = useState<RecentFlag[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getDashboardStats()
+      .then(({ counts, recent }) => {
+        setCounts(counts)
+        setRecent(recent)
+      })
+      .finally(() => setLoading(false))
+  }, [])
+
+  const stats = [
+    {
+      label: "Total Flags",
+      value: loading ? "—" : counts?.total_flags ?? "0",
+      icon: Flag,
+      sub: "Across all environments",
+      iconColor: "text-violet-500",
+      iconBg: "bg-violet-500/10",
+    },
+    {
+      label: "Active Flags",
+      value: loading ? "—" : counts?.active_flags ?? "0",
+      icon: Activity,
+      sub: "Currently enabled",
+      subColor: "text-emerald-500",
+      iconColor: "text-rose-500",
+      iconBg: "bg-rose-500/10",
+    },
+    {
+      label: "Environments",
+      value: "Development, Production",
+      isText: true,
+      icon: Database,
+      iconColor: "text-blue-500",
+      iconBg: "bg-blue-500/10",
+    },
+    {
+      label: "Projects",
+      value: loading ? "—" : counts?.total_projects ?? "0",
+      icon: FolderOpen,
+      sub: "Total projects",
+      iconColor: "text-amber-500",
+      iconBg: "bg-amber-500/10",
+    },
+  ]
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -92,7 +109,7 @@ export default function DashboardPage() {
             <div>
               <p className="font-medium">Recent Flags</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Recently updated feature flags across all environments
+                Recently created feature flags across all environments
               </p>
             </div>
             <Button variant="ghost" size="sm" className="text-muted-foreground text-xs">
@@ -100,7 +117,7 @@ export default function DashboardPage() {
             </Button>
           </div>
 
-          {recentFlags.length === 0 ? (
+          {recent.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="mb-3 flex size-12 items-center justify-center rounded-full bg-muted">
                 <Flag className="size-5 text-muted-foreground" />
@@ -118,27 +135,23 @@ export default function DashboardPage() {
                   <th className="px-6 py-3 text-left font-medium text-muted-foreground">Project</th>
                   <th className="px-6 py-3 text-left font-medium text-muted-foreground">Environment</th>
                   <th className="px-6 py-3 text-left font-medium text-muted-foreground">Status</th>
-                  <th className="px-6 py-3 text-right font-medium text-muted-foreground">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {recentFlags.map((flag, i) => (
-                  <tr key={flag.name} className={i !== recentFlags.length - 1 ? "border-b border-border" : ""}>
-                    <td className="px-6 py-3 font-mono font-medium">{flag.name}</td>
-                    <td className="px-6 py-3 text-muted-foreground">{flag.project}</td>
+                {recent.map((flag, i) => (
+                  <tr key={flag.key + flag.project_name} className={i !== recent.length - 1 ? "border-b border-border" : ""}>
+                    <td className="px-6 py-3 font-mono font-medium">{flag.key}</td>
+                    <td className="px-6 py-3 text-muted-foreground">{flag.project_name}</td>
                     <td className="px-6 py-3">
-                      <Badge variant="secondary" className="font-normal">{flag.environment}</Badge>
+                      <Badge variant="secondary" className="font-normal">Development</Badge>
                     </td>
                     <td className="px-6 py-3">
                       <Badge
-                        variant={flag.enabled ? "default" : "secondary"}
-                        className={flag.enabled ? "bg-emerald-500/15 text-emerald-500 hover:bg-emerald-500/20" : ""}
+                        variant={flag.is_active ? "default" : "secondary"}
+                        className={flag.is_active ? "bg-emerald-500/15 text-emerald-500 hover:bg-emerald-500/20" : ""}
                       >
-                        {flag.enabled ? "On" : "Off"}
+                        {flag.is_active ? "On" : "Off"}
                       </Badge>
-                    </td>
-                    <td className="px-6 py-3 text-right">
-                      <Button variant="ghost" size="sm" className="h-7 text-xs">Edit</Button>
                     </td>
                   </tr>
                 ))}

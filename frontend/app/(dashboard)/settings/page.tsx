@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { getProjects, getEnvironments, generateApiKeys, regenerateApiKey } from "@/lib/api"
+import { getProjects, getEnvironments, generateApiKeys, regenerateApiKey, getMe } from "@/lib/api"
 
 type Tab = "general" | "developer" | "security"
 type Project = { id: string; name: string }
@@ -85,6 +85,23 @@ function SdkKeyRow({ label, sublabel, color, envId, sdkKey, onRegenerated }: {
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
 function GeneralTab() {
+  const [user, setUser] = useState<{ name: string; email: string; emailVerified: boolean; createdAt: string } | null>(null)
+
+  useEffect(() => {
+    getMe().then(setUser)
+  }, [])
+
+  const memberSince = user?.createdAt
+    ? new Date(user.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    : "—"
+
+  const fields = [
+    { label: "Username",     value: user?.name  ?? "—"              },
+    { label: "Email",        value: user?.email ?? "—", verified: user?.emailVerified },
+    { label: "Role",         value: "Owner"                          },
+    { label: "Member Since", value: memberSince                      },
+  ]
+
   return (
     <div className="space-y-8">
       <div>
@@ -99,7 +116,7 @@ function GeneralTab() {
           <CardContent className="p-6 space-y-6">
             <div className="flex items-center gap-4">
               <div className="flex size-16 items-center justify-center rounded-full bg-muted text-xl font-semibold">
-                A
+                {user?.name?.[0]?.toUpperCase() ?? "—"}
               </div>
               <div>
                 <p className="text-sm font-medium">Profile Picture</p>
@@ -110,12 +127,7 @@ function GeneralTab() {
             <Separator />
 
             <div className="grid gap-4">
-              {[
-                { label: "Username",      value: "Anonymous"        },
-                { label: "Email",         value: "user@example.com", verified: true },
-                { label: "Role",          value: "Owner"            },
-                { label: "Member Since",  value: "April 2026"       },
-              ].map(({ label, value, verified }) => (
+              {fields.map(({ label, value, verified }) => (
                 <div key={label} className="space-y-1.5">
                   <label className="text-sm font-medium">{label}</label>
                   <div className="flex items-center gap-2">

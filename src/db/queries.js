@@ -215,6 +215,29 @@ export async function deleteRule(ruleId) {
 
 // ── SDK query ─────────────────────────────────────────────────
 
+export async function getDashboardStats(userId) {
+  const [{ rows: [counts] }, { rows: recent }] = await Promise.all([
+    pool.query(`
+      SELECT
+        (SELECT COUNT(*) FROM flags f JOIN projects p ON p.id = f.project_id WHERE p.user_id = $1) AS total_flags,
+        (SELECT COUNT(*) FROM flag_configs fc JOIN flags f ON f.id = fc.flag_id JOIN projects p ON p.id = f.project_id WHERE p.user_id = $1 AND fc.is_active = true) AS active_flags,
+        (SELECT COUNT(*) FROM projects WHERE user_id = $1) AS total_projects
+    `, [userId]),
+    pool.query(`
+      SELECT f.key, f.name, p.name AS project_name, f.created_at,
+             COALESCE(fc.is_active, false) AS is_active
+      FROM flags f
+      JOIN projects p ON p.id = f.project_id
+      LEFT JOIN environments e ON e.project_id = p.id AND e.name = 'Development'
+      LEFT JOIN flag_configs fc ON fc.flag_id = f.id AND fc.environment_id = e.id
+      WHERE p.user_id = $1
+      ORDER BY f.created_at DESC
+      LIMIT 5
+    `, [userId]),
+  ]);
+  return { counts, recent };
+}
+
 export async function getFlagsForSdkKey(sdkKey) {
   // Step 1: get all flags + their config for this SDK key's environment
   const { rows: flags } = await pool.query(
