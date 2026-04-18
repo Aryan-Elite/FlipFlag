@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useParams } from "next/navigation"
 import { Flag, ArrowLeft, Key, ChevronRight, ToggleLeft, ToggleRight } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { getProject, getEnvironments } from "@/lib/api"
 
 const ENV_STYLES: Record<string, { color: string }> = {
@@ -65,6 +66,19 @@ export default function ProjectDetailPage() {
       {/* Environments */}
       <div>
         <p className="mb-3 text-sm font-medium text-muted-foreground uppercase tracking-wide">Environments</p>
+        {environments.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border p-8 text-center space-y-3">
+            <Key className="size-7 mx-auto text-muted-foreground" />
+            <div>
+              <p className="text-sm font-medium">No API keys yet</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Generate API keys to unlock environments for this project</p>
+            </div>
+            <Link href="/settings">
+              <Button size="sm" variant="outline">Go to Settings → Developer</Button>
+            </Link>
+          </div>
+        ) : null}
+
         <div className="grid gap-3 sm:grid-cols-2">
           {environments.map((env) => {
             const style = ENV_STYLES[env.name] ?? { color: "bg-zinc-500" }

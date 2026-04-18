@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../middlewares/auth.js";
-import { getFlagsByEnvironmentId, createFlag } from "../../db/queries.js";
+import { getFlagsByEnvironmentId, createFlag, regenerateEnvironmentKey } from "../../db/queries.js";
 import { pool } from "../../db/client.js";
 
 const router = Router();
@@ -57,6 +57,15 @@ router.post("/environments/:id/flags", requireAuth, async (req, res) => {
     }
     throw err;
   }
+});
+
+// PATCH /api/environments/:id/regenerate-key
+router.patch("/environments/:id/regenerate-key", requireAuth, async (req, res) => {
+  const env = await getOwnedEnvironment(req.params.id, req.user.id);
+  if (!env) return res.status(404).json({ message: "Environment not found" });
+
+  const updated = await regenerateEnvironmentKey(req.params.id);
+  res.json(updated);
 });
 
 export default router;

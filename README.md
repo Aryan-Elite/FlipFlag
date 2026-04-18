@@ -2,7 +2,7 @@
 
 > A lightweight, self-hostable feature flag service for modern development teams. Ship code safely, control rollouts, and target users — without redeploying.
 
-**Status:** MVP in active development · Frontend live · Backend integration in progress
+**Status:** MVP in active development · Full CRUD live · SDK evaluation endpoint live ✅
 
 🔗 **[Live Demo](https://main.d1v523vwrs34r6.amplifyapp.com/)**
 
@@ -65,8 +65,8 @@ Your application calls one API endpoint, passes user context, and gets back eval
 
 ## How It Works
 
-### 1. Create a Project
-Organize your flags under projects. Each project gets a Development and Production environment with its own SDK key.
+### 1. Create a Project & Generate API Keys
+Organize your flags under projects. After creating a project, go to **Settings → Developer** to generate your Development and Production SDK keys.
 
 ### 2. Create Feature Flags
 Define flags with a key (used in code), a name, and a default rollout percentage.
@@ -139,11 +139,12 @@ Rollout uses **FNV-1a hashing** on `flagKey + userId` — deterministic, meaning
 ## Database Schema
 
 ```
-users           → email, password
+users           → email, name (managed by Better Auth)
 projects        → belongs to user
-environments    → belongs to project, has sdk_key
-flags           → belongs to environment, has key + default_rollout
-targeting_rules → belongs to flag, has field/values/rollout/serve/priority
+environments    → belongs to project, has unique sdk_key (ff_dev_xxx / ff_prod_xxx)
+flags           → belongs to project (exists across all envs), has key + name + tags
+flag_configs    → one per (flag, environment) — holds is_active + default_rollout
+targeting_rules → belongs to flag_config, has field/values/rollout/serve/priority
 ```
 
 ---

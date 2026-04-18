@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { pool } from "./client.js";
 
 // ── User queries ──────────────────────────────────────────────
@@ -68,6 +69,18 @@ export async function getEnvironmentsByProjectId(projectId) {
     [projectId]
   );
   return rows;
+}
+
+export async function regenerateEnvironmentKey(envId) {
+  const env = await getEnvironmentById(envId);
+  const prefix = env?.name === "Production" ? "ff_prod_" : "ff_dev_";
+  const newKey = `${prefix}${randomUUID().slice(0, 8)}`;
+
+  const { rows } = await pool.query(
+    `UPDATE environments SET sdk_key = $2 WHERE id = $1 RETURNING id, name, sdk_key, created_at`,
+    [envId, newKey]
+  );
+  return rows[0];
 }
 
 export async function getEnvironmentById(id) {
@@ -198,6 +211,37 @@ export async function deleteRule(ruleId) {
     `DELETE FROM targeting_rules WHERE id = $1`, [ruleId]
   );
   return rowCount > 0;
+}
+
+// ── SDK query ─────────────────────────────────────────────────
+
+export async function getFlagsForSdkKey(sdkKey) {
+  // Step 1: get all flags + their config for this SDK key's environment
+  const { rows: flags } = await pool.query(
+    `SELECT f.key, fc.id AS config_id, fc.is_active, fc.default_rollout
+     FROM environments e
+     JOIN flag_configs fc ON fc.environment_id = e.id
+     JOIN flags f ON f.id = fc.flag_id
+     WHERE e.sdk_key = $1`,
+    [sdkKey]
+  );
+  if (!flags.length) return [];
+
+  // Step 2: get all active rules for those flag_configs, sorted by priority
+  const configIds = flags.map((f) => f.config_id);
+  const { rows: rules } = await pool.query(
+    `SELECT flag_config_id, field_name, values, rollout_percent, serve
+     FROM targeting_rules
+     WHERE flag_config_id = ANY($1) AND is_active = true
+     ORDER BY priority ASC`,
+    [configIds]
+  );
+
+  // Step 3: attach each rule to its flag
+  return flags.map((flag) => ({
+    ...flag,
+    rules: rules.filter((r) => r.flag_config_id === flag.config_id),
+  }));
 }
 
 export async function getFlagById(flagId, environmentId) {

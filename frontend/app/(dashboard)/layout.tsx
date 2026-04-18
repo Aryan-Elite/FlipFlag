@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Flag, LayoutDashboard, FolderOpen, Settings, LogOut } from "lucide-react"
@@ -20,8 +21,18 @@ const environments = [
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
-  const router   = useRouter()
+  const pathname        = usePathname()
+  const router          = useRouter()
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    authClient.getSession().then(({ data }) => {
+      if (!data?.session) router.replace("/login")
+      else setReady(true)
+    })
+  }, [])
+
+  if (!ready) return null
 
   async function handleLogout() {
     await authClient.signOut()

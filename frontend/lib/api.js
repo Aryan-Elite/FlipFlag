@@ -52,6 +52,14 @@ export function getEnvironment(envId) {
   return request(`/api/environments/${envId}`);
 }
 
+export function generateApiKeys(projectId) {
+  return request(`/api/projects/${projectId}/generate-keys`, { method: "POST" });
+}
+
+export function regenerateApiKey(envId) {
+  return request(`/api/environments/${envId}/regenerate-key`, { method: "PATCH" });
+}
+
 // ── Flags ──────────────────────────────────────────────────────
 
 export function getFlags(envId) {

@@ -1,42 +1,45 @@
 "use client"
 
-import { useState } from "react"
-import { User, Code2, Shield, Eye, EyeOff, Copy, Check, RefreshCw, FolderOpen, Key } from "lucide-react"
+import { useState, useEffect } from "react"
+import { User, Code2, Shield, Eye, EyeOff, Copy, Check, FolderOpen, Key, Loader2, RefreshCw } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { getProjects, getEnvironments, generateApiKeys, regenerateApiKey } from "@/lib/api"
 
 type Tab = "general" | "developer" | "security"
+type Project = { id: string; name: string }
+type Environment = { id: string; name: string; sdk_key: string }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-const MOCK_PROJECTS = [
-  { id: 1, name: "My SaaS App"  },
-  { id: 2, name: "Admin Panel"  },
-]
-
-const MOCK_KEYS: Record<number, { dev: string; prod: string }> = {
-  1: { dev: "ff_dev_a1b2c3d4e5f6g7h8i9j0k1l2",  prod: "ff_prod_z9y8x7w6v5u4t3s2r1q0p9o8" },
-  2: { dev: "ff_dev_m2n3o4p5q6r7s8t9u0v1w2x3",  prod: "ff_prod_l8k7j6i5h4g3f2e1d0c9b8a7" },
-}
+// ─── SDK Key row ──────────────────────────────────────────────────────────────
 
 function maskKey(key: string) {
   return key.slice(0, 10) + "•".repeat(16) + key.slice(-4)
 }
 
-// ─── SDK Key row ──────────────────────────────────────────────────────────────
-
-function SdkKeyRow({ label, sublabel, color, sdkKey }: {
-  label: string; sublabel: string; color: string; sdkKey: string
+function SdkKeyRow({ label, sublabel, color, envId, sdkKey, onRegenerated }: {
+  label: string; sublabel: string; color: string; envId: string; sdkKey: string
+  onRegenerated: (envId: string, newKey: string) => void
 }) {
-  const [visible, setVisible] = useState(false)
-  const [copied,  setCopied]  = useState(false)
+  const [visible,      setVisible]      = useState(false)
+  const [copied,       setCopied]       = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
 
   function handleCopy() {
     navigator.clipboard.writeText(sdkKey)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function handleRegenerate() {
+    setRegenerating(true)
+    try {
+      const updated = await regenerateApiKey(envId)
+      onRegenerated(envId, updated.sdk_key)
+    } finally {
+      setRegenerating(false)
+    }
   }
 
   return (
@@ -49,8 +52,14 @@ function SdkKeyRow({ label, sublabel, color, sdkKey }: {
             <p className="text-xs text-muted-foreground">{sublabel}</p>
           </div>
         </div>
-        <Button variant="ghost" size="sm" className="gap-1.5 text-xs text-muted-foreground">
-          <RefreshCw className="size-3" /> Regenerate
+        <Button
+          variant="ghost" size="sm"
+          className="gap-1.5 text-xs text-muted-foreground"
+          onClick={handleRegenerate}
+          disabled={regenerating}
+        >
+          {regenerating ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
+          Regenerate
         </Button>
       </div>
 
@@ -143,11 +152,53 @@ function GeneralTab() {
 }
 
 function DeveloperTab() {
-  const [projectId, setProjectId] = useState(1)
-  const keys = MOCK_KEYS[projectId]
+  const [projects,   setProjects]   = useState<Project[]>([])
+  const [projectId,  setProjectId]  = useState<string>("")
+  const [envs,       setEnvs]       = useState<Environment[]>([])
+  const [loadingEnv, setLoadingEnv] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [error,      setError]      = useState<string | null>(null)
+
+  useEffect(() => {
+    getProjects().then((data: Project[]) => {
+      setProjects(data)
+      if (data.length > 0) setProjectId(data[0].id)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!projectId) return
+    setLoadingEnv(true)
+    setEnvs([])
+    setError(null)
+    getEnvironments(projectId)
+      .then((data: Environment[]) => setEnvs(data))
+      .catch(() => setEnvs([]))
+      .finally(() => setLoadingEnv(false))
+  }, [projectId])
+
+  async function handleGenerate() {
+    setGenerating(true)
+    setError(null)
+    try {
+      const data = await generateApiKeys(projectId)
+      setEnvs(data.environments)
+    } catch (e: any) {
+      setError(e.message ?? "Failed to generate keys")
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  function handleRegenerated(envId: string, newKey: string) {
+    setEnvs(prev => prev.map(e => e.id === envId ? { ...e, sdk_key: newKey } : e))
+  }
+
+  const devEnv  = envs.find(e => e.name === "Development")
+  const prodEnv = envs.find(e => e.name === "Production")
+  const hasKeys = envs.length > 0
 
   const codeExample = [
-    `// Evaluate flags for a user`,
     `const result = await fetch("/api/sdk/flags", {`,
     `  method: "POST",`,
     `  headers: { "X-SDK-Key": "ff_dev_..." },`,
@@ -177,7 +228,7 @@ function DeveloperTab() {
               Initialize the SDK in your application with these environment-specific keys
             </p>
           </div>
-          <Badge variant="secondary" className="gap-1 font-normal">2 Environments</Badge>
+          {hasKeys && <Badge variant="secondary" className="gap-1 font-normal">2 Environments</Badge>}
         </div>
 
         {/* Project selector */}
@@ -185,19 +236,38 @@ function DeveloperTab() {
           <label className="text-sm font-medium">Select Project</label>
           <select
             value={projectId}
-            onChange={(e) => setProjectId(Number(e.target.value))}
+            onChange={(e) => setProjectId(e.target.value)}
             className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
           >
-            {MOCK_PROJECTS.map((p) => (
+            {projects.length === 0 && <option value="">No projects yet</option>}
+            {projects.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
         </div>
 
-        <div className="space-y-3">
-          <SdkKeyRow label="Development" sublabel="Development Environment" color="bg-blue-500"    sdkKey={keys.dev}  />
-          <SdkKeyRow label="Production"  sublabel="Production Environment"  color="bg-emerald-500" sdkKey={keys.prod} />
-        </div>
+        {loadingEnv ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+            <Loader2 className="size-4 animate-spin" /> Loading keys…
+          </div>
+        ) : hasKeys ? (
+          <div className="space-y-3">
+            {devEnv  && <SdkKeyRow label="Development" sublabel="Development Environment" color="bg-blue-500"    envId={devEnv.id}  sdkKey={devEnv.sdk_key}  onRegenerated={handleRegenerated} />}
+            {prodEnv && <SdkKeyRow label="Production"  sublabel="Production Environment"  color="bg-emerald-500" envId={prodEnv.id} sdkKey={prodEnv.sdk_key} onRegenerated={handleRegenerated} />}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-border p-6 text-center space-y-3">
+            <FolderOpen className="size-8 mx-auto text-muted-foreground" />
+            <div>
+              <p className="text-sm font-medium">No API keys yet</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Generate keys to start using the SDK for this project</p>
+            </div>
+            {error && <p className="text-xs text-destructive">{error}</p>}
+            <Button size="sm" onClick={handleGenerate} disabled={generating || !projectId}>
+              {generating ? <><Loader2 className="size-3 mr-1.5 animate-spin" /> Generating…</> : "Generate API Keys"}
+            </Button>
+          </div>
+        )}
       </section>
 
       <Separator />
@@ -222,7 +292,7 @@ function DeveloperTab() {
         <div className="mt-4 space-y-3 text-sm text-muted-foreground">
           {[
             "Copy the SDK key for your target environment (Development or Production)",
-            `Send it as the X-SDK-Key header in POST /api/sdk/flags`,
+            "Send it as the X-SDK-Key header in POST /api/sdk/flags",
             "Include userId + attributes in the body to get evaluated flags back",
           ].map((step, i) => (
             <div key={i} className="flex gap-3">

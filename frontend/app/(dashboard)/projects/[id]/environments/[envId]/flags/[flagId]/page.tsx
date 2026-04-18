@@ -94,6 +94,7 @@ export default function FlagDetailPage() {
   const [ruleOperator,    setRuleOperator]    = useState("in")
   const [ruleValues,      setRuleValues]      = useState("")
   const [ruleServe,       setRuleServe]       = useState(true)
+  const [ruleRollout,     setRuleRollout]     = useState<number | null>(null)
   const [addingRule,      setAddingRule]      = useState(false)
 
   useEffect(() => {
@@ -154,6 +155,7 @@ export default function FlagDetailPage() {
         operator: ruleOperator,
         values,
         serve: ruleServe,
+        rolloutPercent: ruleRollout,
         priority: flag!.rules.length,
       })
       setFlag((f) => f ? { ...f, rules: [...f.rules, rule] } : f)
@@ -162,6 +164,7 @@ export default function FlagDetailPage() {
       setRuleValues("")
       setRuleServe(true)
       setRuleOperator("in")
+      setRuleRollout(null)
     } finally {
       setAddingRule(false)
     }
@@ -291,6 +294,9 @@ export default function FlagDetailPage() {
                 <Badge variant="secondary" className={rule.serve ? "bg-emerald-500/15 text-emerald-600" : "bg-red-500/15 text-red-600"}>
                   serve {rule.serve ? "true" : "false"}
                 </Badge>
+                {rule.rollout_percent !== null && (
+                  <span className="text-xs text-muted-foreground ml-1">· {rule.rollout_percent}% rollout</span>
+                )}
               </p>
             </div>
           ))}
@@ -335,6 +341,19 @@ export default function FlagDetailPage() {
                 >
                   false
                 </button>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground">Rollout %:</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  placeholder="optional"
+                  value={ruleRollout ?? ""}
+                  onChange={(e) => setRuleRollout(e.target.value === "" ? null : Number(e.target.value))}
+                  className="w-24 rounded-lg border border-input bg-background px-3 py-1.5 text-sm outline-none focus:border-ring"
+                />
+                <span className="text-xs text-muted-foreground">Leave empty = all matched users</span>
               </div>
               <div className="flex gap-2">
                 <Button size="sm" onClick={handleAddRule} disabled={addingRule || !ruleField.trim() || !ruleValues.trim()}>

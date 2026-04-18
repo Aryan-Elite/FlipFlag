@@ -20,7 +20,6 @@ router.get("/projects", requireAuth, async (req, res) => {
 });
 
 // POST /api/projects
-// Creates a project + auto-creates Development and Production environments
 router.post("/projects", requireAuth, async (req, res) => {
   const { name } = req.body;
 
@@ -29,14 +28,26 @@ router.post("/projects", requireAuth, async (req, res) => {
   }
 
   const project = await createProject(req.user.id, name.trim());
+  res.status(201).json(project);
+});
 
-  // Auto-create Dev and Prod environments for every new project
+// POST /api/projects/:id/generate-keys
+// Creates Dev + Prod environments with SDK keys — only if none exist yet
+router.post("/projects/:id/generate-keys", requireAuth, async (req, res) => {
+  const project = await getProjectById(req.params.id, req.user.id);
+  if (!project) return res.status(404).json({ message: "Project not found" });
+
+  const existing = await getEnvironmentsByProjectId(req.params.id);
+  if (existing.length > 0) {
+    return res.status(409).json({ message: "API keys already exist for this project" });
+  }
+
   const [dev, prod] = await Promise.all([
-    createEnvironment(project.id, "Development", `ff_dev_${randomUUID().slice(0, 8)}`),
-    createEnvironment(project.id, "Production", `ff_prod_${randomUUID().slice(0, 8)}`),
+    createEnvironment(req.params.id, "Development", `ff_dev_${randomUUID().slice(0, 8)}`),
+    createEnvironment(req.params.id, "Production",  `ff_prod_${randomUUID().slice(0, 8)}`),
   ]);
 
-  res.status(201).json({ ...project, environments: [dev, prod] });
+  res.status(201).json({ environments: [dev, prod] });
 });
 
 // GET /api/projects/:id
