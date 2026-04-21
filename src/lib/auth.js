@@ -11,6 +11,11 @@ export const auth = betterAuth({
   ],
   advanced: {
     disableCsrfCheck: process.env.NODE_ENV !== "production",
+    defaultCookieAttributes: {
+      sameSite: "none",
+      secure: true,
+      httpOnly: true,
+    },
   },
   account: {
     skipStateCookieCheck: true,
