@@ -42,7 +42,7 @@ Your application calls one API endpoint, passes user context, and gets back eval
 - `IN` operator for matching attribute values against a list
 
 ### 📊 Percentage Rollouts
-- Gradual rollouts using **deterministic hashing** (FNV-1a)
+- Gradual rollouts with deterministic bucketing
 - Same user always gets the same result — no flicker
 - Rollout defined per rule, not globally
 
@@ -103,24 +103,6 @@ X-SDK-Key: ff_dev_your_key_here
 }
 ```
 
-### Evaluation Logic
-```
-Flag enabled globally?
-  → No  → return false
-
-  → Yes → evaluate rules top to bottom (by priority)
-      Rule matches user?
-        Has rollout + user in bucket  → return serve value, STOP
-        Has rollout + user NOT in bucket → continue to next rule
-        No rollout → return serve value, STOP
-
-  → No rules matched
-      Has defaultRollout? → hash(flagKey + userId) % 100 < rollout
-      No defaultRollout   → return false
-```
-
-Rollout uses **FNV-1a hashing** on `flagKey + userId` — deterministic, meaning the same user always lands in the same bucket.
-
 ---
 
 ## Tech Stack
@@ -135,17 +117,6 @@ Rollout uses **FNV-1a hashing** on `flagKey + userId` — deterministic, meaning
 | Infrastructure | Docker (local), AWS Amplify (frontend) |
 
 ---
-
-## Database Schema
-
-```
-users           → email, name (managed by Better Auth)
-projects        → belongs to user
-environments    → belongs to project, has unique sdk_key (ff_dev_xxx / ff_prod_xxx)
-flags           → belongs to project (exists across all envs), has key + name + tags
-flag_configs    → one per (flag, environment) — holds is_active + default_rollout
-targeting_rules → belongs to flag_config, has field/values/rollout/serve/priority
-```
 
 ---
 
