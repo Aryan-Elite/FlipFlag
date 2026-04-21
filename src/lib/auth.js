@@ -11,9 +11,6 @@ export const auth = betterAuth({
   ],
   advanced: {
     disableCsrfCheck: process.env.NODE_ENV !== "production",
-    crossSubdomainCookies: {
-      enabled: true,
-    },
   },
   emailAndPassword: { enabled: true },
   socialProviders: {
