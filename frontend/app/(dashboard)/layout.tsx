@@ -27,6 +27,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     authClient.getSession().then(({ data }) => {
+      console.log("session result:", JSON.stringify(data))
       if (!data?.session) router.replace("/login")
       else setReady(true)
     })
