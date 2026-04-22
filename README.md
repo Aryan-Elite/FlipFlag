@@ -174,4 +174,4 @@ npm run dev
 
 ## Author
 
-Built by [Aryan Gupta](https://github.com/Aryan-Elite) · [LinkedIn](https://linkedin.com/in/your-profile)
+Built by [Aryan Gupta](https://github.com/Aryan-Elite) · [LinkedIn](https://www.linkedin.com/in/aryan-gupta-41494323a)
