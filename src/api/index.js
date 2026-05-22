@@ -16,10 +16,12 @@ app.use(cors({
 
 app.use(express.json());
 
+// Custom auth routes first — must be before the Better Auth wildcard
+app.use('/api', router);
+
 // Better Auth — handles sign-up, sign-in, sign-out, session, etc.
 // Routes: POST /api/auth/sign-up/email, POST /api/auth/sign-in/email, POST /api/auth/sign-out ...
 app.all('/api/auth/*path', toNodeHandler(auth));
-app.use('/api', router);
 
 app.get('/', (req, res) => {
   res.send('FlipFlag API');

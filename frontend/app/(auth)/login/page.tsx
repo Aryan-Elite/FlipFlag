@@ -40,7 +40,7 @@ export default function LoginPage() {
     try {
       await authClient.signIn.social({
         provider: "google",
-        callbackURL: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/dashboard`,
+        callbackURL: `${window.location.origin}/dashboard`,
       })
     } catch {
       setError("Google sign-in failed. Please try again.")
